@@ -21,9 +21,6 @@ class Scheduler(object):
         globals.schedulers[self.name] = self
 
     def add_job(self, module=None, name=None, interval=None, function=None, channels=[], enabled=None):
-        # if utils.job_exists(module=module, name=name):
-        #     logging.error(f'A scheduled job with the name {module}.{name} already exists. Please choose another name.')
-        # else:
         logging.info(f'Adding the scheduled job {module}.{name}.')
         db.add_job(module=module, name=name, interval=interval, function=function, enabled=enabled)
         if not utils.job_exists(module=module, name=name):

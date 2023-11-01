@@ -199,16 +199,18 @@ class Plugin(BasePlugin):
                 command.error.messages.append('An error occurred when trying to fetch the scheduled job list.')            
 
     def reload(self, command=None):
+        sleep_period = 60
+        command.success = True
         command.output.messages.append('before:')
         for plugin_name, plugin in globals.plugins.items():
             command.output.messages.append(str(plugin))
         
         for name, scheduler in globals.schedulers.items():
-            logging.info(f'Stopping the scheduler thread for {name}...')
             scheduler.stop()
-        logging.info('Restarting in 60 seconds...')
-        time.sleep(60)
-        globals.bot.run()
+        logging.info(f'Restarting in {sleep_period} seconds...')
+        time.sleep(sleep_period)
+
+        globals.bot.load_plugins(reload=True)
 
         command.output.messages.append('after:')
         for _, plugin in globals.plugins.items():
@@ -402,10 +404,8 @@ class Plugin(BasePlugin):
             return
 
         try:
-            pprint(args)
             args.func(args, command)
         except Exception as e:
-            print(e)
             command.output.errors.append(self.channels_parser.format_help().rstrip())
             return
     
@@ -679,6 +679,9 @@ class Plugin(BasePlugin):
         self.modules_parser.add_argument('-e', '--enable', help='Enable a module and all of its commands.', metavar='<module>', action='store')
         self.modules_parser.add_argument('-d', '--disable', help='Disablea module and all of its commands.', metavar='<modules>', action='store')
 
+        self.reload_parser = argparse.ArgumentParser(add_help=False, prog='reload', description='Reload all confiugred modules.')
+        self.reload_parser.set_defaults(func=self.reload)
+
         self.seen_parser = argparse.ArgumentParser(add_help=False, prog='seen', description='Show when <username> was last seen.')
         self.seen_parser.set_defaults(func=self.seen)
 
@@ -807,15 +810,16 @@ class Plugin(BasePlugin):
                 'monospace': 1,
                 'split_output': 0,
             },
-            # 'reload': {
-            #     'usage': 'reload -- Reload all configured plugins. Experimental.',
-            #     'is_admin': 1,
-            #     'type': 'all',
-            #     'can_be_disabled': 0,
-            #     'hidden': 0,
-            #     'monospace': 1,
-            #     'split_output': 0, 
-            # },
+            'reload': {
+                'description': self.reload_parser.description,
+                'usage': self.reload_parser.format_help().rstrip(),
+                'is_admin': 1,
+                'type': 'all',
+                'can_be_disabled': 0,
+                'hidden': 0,
+                'monospace': 1,
+                'split_output': 0,
+            },
             'whisper': {
                 'description': self.whisper_parser.description,
                 'usage': self.whisper_parser.format_help().rstrip(),

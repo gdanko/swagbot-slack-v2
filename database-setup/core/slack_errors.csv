@@ -1,0 +1,26 @@
+conversations_invite,not_in_channel,I cannot invite {user} to {channel} because I am not in that channel.
+conversations_invite,already_in_channel,I cannot invite {user} to {channel} because they are already in the channel.
+conversations_invite,cannot_be_invited,I cannot invite {user} to {channel} because they cannot be invited to the channel.
+conversations_invite,cant_invite_self,I cannot invite myself to {channel}.
+conversations_invite,is_archived,I cannot invite {user} to {channel} because that channel has been archived.
+conversations_invite,no_permission,I cannot invite {user} to {channel} because I don't have permission to do so.
+conversations_invite,ratelimited,Please try this command in a few minutes.
+conversations_join,is_archived,I cannot join {channel} because that channel has been archived.
+conversations_join,too_many_members,I cannot join {channel} because it currently has too many members.
+conversations_join,ratelimited,Please try this command in a few minutes.
+conversations_kick,cant_kick_from_general,I cannot kick users from the general channel.
+conversations_kick,cant_kick_self,I cannot kick myself.
+conversations_kick,not_in_channel,I cannot kick {user} from {channel} because they are not in that channel.
+conversations_kick,not_supported,I cannot kick {user} from {channel} because this operation is unsupported.
+conversations_kick,restricted_action,I cannot kick {user} from {channel} because that action is restricted.
+conversations_kick,ratelimited,Please try this command in a few minutes.
+conversations_leave,cant_leave_general,I am not allowed to leave the general channel.
+conversations_leave,is_archived,I cannot leave {channel} because it has been archived.
+conversations_leave,last_member,I cannot leave {channel} because I am the last member in the channel.
+conversations_leave,ratelimited,Please try this command in a few minutes.
+conversations_setPurpose,not_in_channel,I cannot set the purpose for {channel} because I am not in that channel.
+conversations_setPurpose,ratelimited,Please try this command in a few minutes.
+conversations_setPurpose,is_archived,I cannot set the purpose for {channel} because it has been archived.
+conversations_setTopic,not_in_channel,I cannot set the topic for {channel} because I am not in that channel.
+conversations_setTopic,ratelimited,Please try this command in a few minutes.
+conversations_setTopic,is_archived,I cannot set the topic for {channel} because it has been archived.

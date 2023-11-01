@@ -68,7 +68,7 @@ class SwagBot(object):
         self.start_time = utils.now()
         app = App(token=self.bot_token)
         self.client = app.client
-        self.load_plugins(client=self.client)
+        self.load_plugins(reload=False)
 
         @app.event('message')
         def message_handler(event, say):
@@ -89,53 +89,38 @@ class SwagBot(object):
         logging.info('SwagBot ready in {} seconds.'.format('{0:.4f}'.format(self.ready_time - self.start_time)))
         SocketModeHandler(app, self.app_token).start()
 
-    def load_plugins(self, client=None):
-        # https://packaging.python.org/guides/creating-and-discovering-plugins/
+    def iter_namespace(self, ns_pkg):
+        # Specifying the second argument (prefix) to iter_modules makes the
+        # returned name an absolute name instead of a relative one. This allows
+        # import_module to work without having to do additional modification to the name.
+        return pkgutil.iter_modules(ns_pkg.__path__, ns_pkg.__name__ + '.')
+
+    def load_plugins(self, reload=False):
+        loading = 'Reloading' if reload else 'Loading'
         globals.plugins = {}
-
-        def iter_namespace(ns_pkg):
-            # Specifying the second argument (prefix) to iter_modules makes the
-            # returned name an absolute name instead of a relative one. This allows
-            # import_module to work without having to do additional modification to the name.
-            return pkgutil.iter_modules(ns_pkg.__path__, ns_pkg.__name__ + '.')
-
-        for finder, name, ispkg in iter_namespace(swagbot.plugins):
-            module_fullname = name
-
-            # if module_fullname in self.plugins:
-            if module_fullname in globals.plugins:
-                logging.warning('Could not load the module "{}" as a module with the same name is already loaded.'.format(module_fullname))
+        for importer, modulename, ispkg in self.iter_namespace(swagbot.plugins):
+            if modulename in globals.plugins:
+                logging.warning(f'Could not load the module "{modulename}" as a module with the same name is already loaded.')
             else:
-                module = db.get_module(module=module_fullname)
+                module = db.get_module(module=modulename)
                 if module:
                     if module['enabled'] == 1:
-                        logging.info('Loading module {}.'.format(module_fullname))
-                        module_obj = importlib.import_module(module_fullname)
-                        module_instance = module_obj.Plugin(client=client)
-                        logging.info('Updating bot commands for the module {}.'.format(module_fullname))
+                        logging.info(f'{loading} module {modulename}.')
+                        module_obj = importlib.import_module(modulename)
+                        if reload:
+                            importlib.reload(module_obj)
+                        module_instance = module_obj.Plugin(client=self.client)
+                        logging.info(f'Updating bot commands for the module {modulename}.')
                         db.update_plugin_commands(module=module_instance.classname, methods=module_instance.methods)
-
-                        globals.plugins[module_fullname] = {
-                            'module': module_fullname,
+                        globals.plugins[modulename] = {
+                            'module': modulename,
                             'instance': module_instance,
                         }
                     else:
-                        logging.info('Not loading module {} because it is disabled.'.format(module_fullname))
+                        logging.info(f'Not loading module {modulename} because it is disabled.')
                 else:
-                    logging.info('I have found a new module named "{}" which is not in the database. I will insert it and leave it disabled.'.format(module_fullname))
-                    db.moduleadd(module=module_fullname)
-
-        self.prune_commands_table()
-
-    def reload_plugins(self):
-        logging.info('Reloading the plugins')
-        for _, plugin_object in globals.plugins.items():
-            # We need to re-import the modules dynamically
-            # https://stackoverflow.com/questions/52134490/importlib-reload-module-from-string
-            module_name = self.sanitize_module_name(plugin_object['module'])
-            reloadable = importlib.import_module(module_name)
-            importlib.reload(reloadable)
-        self.load_plugins()
+                    logging.info(f'I have found a new module named "{modulename}" which is not in the database. I will insert it and leave it disabled.')
+                    db.moduleadd(module=modulename)
 
     def sanitize_module_name(self, name):
         separator = '.'

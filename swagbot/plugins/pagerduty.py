@@ -11,7 +11,7 @@ import swagbot.scheduler
 import swagbot.utils.core as utils
 import sys
 
-class Plugin(object):
+class Plugin(BasePlugin):
     def __init__(self, client):
         self.__configure_parsers()
         self.methods = self.__setup_methods()
@@ -50,7 +50,7 @@ class Plugin(object):
         try:
             args = self.events_parser.parse_args()
         except:
-            command.output.errors.append(self.events_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.events_parser.format_help().rstrip())
             return
 
         start = None
@@ -59,13 +59,13 @@ class Plugin(object):
         if args.start:
             start = utils.validate_date(date=args.start)
             if not start:
-                command.output.errors.append(f'Invalid start time format: {args.start}')
+                self.send_plain(command.event.channel, f'Invalid start time format: `{args.start}`.')
                 return
         
         if args.end:
             args.end = utils.validate_date(date=args.end)
             if not end:
-                command.output.errors.append(f'Invalid end time format: {args.end}')
+                self.send_plain(command.event.channel, f'Invalid end time format: `{args.end}`.')
                 return
         
         if args.status:
@@ -75,34 +75,32 @@ class Plugin(object):
         else:
             status = ['triggered']
 
-        success, data = self.__pagerduty_events(status=status, urgency=args.urgency, service=args.service, start=start, end=start, limit=args.limit)
+        success, output = self.__pagerduty_events(status=status, urgency=args.urgency, service=args.service, start=start, end=start, limit=args.limit)
         if success:
-            if len(data) > 0:
-                command.success = True
-                for chunk in utils.chunker(data, 10):
-                    command.output.messages.append(utils.generate_table(headers=['Created', 'Service', 'Description', 'Urgency', 'Status', 'Owner'], data=chunk))
+            if len(output) > 0:
+                for chunk in utils.chunker(output, 10):
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['Created', 'Service', 'Description', 'Urgency', 'Status', 'Owner'], data=chunk))
             else:
-                command.output.errors.append('No PagerDuty events found matching the specified criteria.')
+                self.send_plain(command.event.channel, 'No PagerDuty events found matching the specified criteria.')
         else:
-            command.output.errors.append(data)
+            self.send_plain(command.event.channel, output)
 
     def __events_ticker(self):
         name = 'events_ticker'
-        success, data = self.__pagerduty_events(status=self.config['jobs'][name]['statuses'], limit=100)
+        success, output = self.__pagerduty_events(status=self.config['jobs'][name]['statuses'], limit=100)
         if success:
-            if len(data) > 0:
-                plural = 'event' if len(data) == 1 else 'events'
-                are = 'is' if len(data) == 1 else 'are'
+            if len(output) > 0:
+                plural = 'event' if len(output) == 1 else 'events'
+                are = 'is' if len(output) == 1 else 'are'
                 for channel_id in self.config['jobs'][name]['channels']:
-                    self.client.chat_postMessage(channel=channel_id, text=f'There {are} currently {len(data)} triggered {plural} in PagerDuty.')
-                    text = utils.generate_table(headers=['Created', 'Service', 'Description', 'Urgency', 'Status', 'Owner'], data=data)
-                    self.client.chat_postMessage(channel=channel_id, text=f'```{text}```')
+                    self.send_plain(channel_id, f'There {are} currently {len(output)} triggered {plural} in PagerDuty.')
+                    self.send_monospace(channel_id,utils.generate_table(headers=['Created', 'Service', 'Description', 'Urgency', 'Status', 'Owner'], data=output))
             else:
                 for channel_id in self.config['jobs'][name]['channels']:
-                    self.client.chat_postMessage(channel=channel_id, text='There are currently no triggered incidents.')
+                    self.send_plain(channel_id, 'There are currently no triggered incidents.')
         else:
             for channel_id in self.config['jobs'][name]['channels']:
-                self.client.chat_postMessage(channel=channel_id, text='Unable to retrieve PagerDuty events at this time. I will try again in a few minutes.')
+                self.send_monospace(channel_id, 'Unable to retrieve PagerDuty events at this time. I will try again in a few minutes.')
    
     def __pagerduty_events(self, status=[], urgency=[], service=[], start=None, end=None, limit=100):
         qs = {
@@ -145,7 +143,7 @@ class Plugin(object):
         try:
             args = self.oncall_parser.parse_args()
         except:
-            command.output.errors.append(self.oncall_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.oncall_parser.format_help().rstrip())
             return
         
         if args.min:
@@ -173,7 +171,6 @@ class Plugin(object):
         oncalls = db.get_oncall_temp(min=min, max=max)
         if oncalls:
             if len(oncalls) > 0:
-                command.success = True
                 for chunk in utils.chunker(oncalls, 25):
                     output = []
                     for item in chunk:
@@ -182,11 +179,11 @@ class Plugin(object):
                             item['level'],
                             item['name'],
                         ])
-                    command.output.messages.append(utils.generate_table(headers=['Escalation Policy', 'Level', 'Name'], data=output))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['Escalation Policy', 'Level', 'Name'], data=output))
             else:
-                command.output.errors.append('Crikey! No oncall data found. Try again later.')
+                self.send_monospace(command.event.channel, 'Uh oh! No oncall data found. Try again later.')
         else:
-            command.output.errors.append('Failed to get oncall information. Try again later.')
+            self.send_monospace(command.event.channel, 'Failed to get oncall information. Try again later.')
 
     def __oncall_ticker(self):
         name = 'oncall_ticker'
@@ -202,15 +199,14 @@ class Plugin(object):
                         item['name'],
                     ])
                 for channel_id in self.config['jobs'][name]['channels']:
-                    self.client.chat_postMessage(channel=channel_id, text=f'Curretly oncall')
-                    text = utils.generate_table(headers=['Escalation Policy', 'Level', 'Name'], data=output)
-                    self.client.chat_postMessage(channel=channel_id, text=f'```{text}```')
+                    self.send_plain(channel_id, f'Curretly oncall')
+                    self.send_monospace(channel_id, utils.generate_table(headers=['Escalation Policy', 'Level', 'Name'], data=output))
             else:
                 for channel_id in self.config['jobs'][name]['channels']:
-                    self.client.chat_postMessage(channel=channel_id, text='No oncall data found. I will try again later.')
+                    self.send_plain(channel_id, 'No oncall data found. I will try again later.')
         else:
             for channel_id in self.config['jobs'][name]['channels']:
-                self.client.chat_postMessage(channel=channel_id, text='No oncall data found. I will try again later.')
+                self.send_plain(channel_id, 'No oncall data found. I will try again later.')
 
     def __oncall_search(self, escalation_policy_ids=[]):
         db.wipe_oncall_temp()
@@ -249,26 +245,26 @@ class Plugin(object):
         try:
             args = self.overrides_parser.parse_args()
         except:
-            command.output.errors.append(help[sys.argv[1]])
+            self.send_monospace(command.event.channel, help[sys.argv[1]])
             return
 
         if hasattr(args, 'start'):
             args.start = utils.to8601(args.start)
             if not args.start:
-                command.output.errors.append(f'Invalid start time format: {args.start}')
+                self.send_plain(command.event.channel, f'Invalid start time format: `{args.start}`.')
                 return
         
         if hasattr(args, 'end'):
             args.end = utils.to8601(args.end)
             if not args.end:
-                command.output.errors.append(f'Invalid end time format: {args.end}')
+                self.send_plain(command.event.channel, f'Invalid end time format: `{args.end}`.')
                 return
 
         try:
             args.func(args, command)
         except Exception as e:
             print(e)
-            command.output.errors.append(self.overrides_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.overrides_parser.format_help().rstrip())
             return
 
     def overrides_list(self, args, command):
@@ -289,13 +285,12 @@ class Plugin(object):
                     override['user']['summary'],
                 ])
             if len(overrides) > 0:
-                command.success = True
                 for chunk in utils.chunker(overrides, 10):
-                    command.output.messages.append(utils.generate_table(headers=['ID', 'Schedule ID', 'Start', 'End', 'Name'], data=chunk))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['ID', 'Schedule ID', 'Start', 'End', 'Name'], data=chunk))
             else:
-                command.output.errors.append('Crikey! No override data found. Try again later.')
+                self.send_plain(command.event.channel, 'Uh oh! No override data found. Try again later.')
         else:
-            command.output.errors.append(self.response['error']['message'])
+            self.send_plain(command.event.channel, self.response['error']['message'])
             return
 
     def overrides_add(self, args, command):
@@ -314,19 +309,17 @@ class Plugin(object):
         uri = f'https://api.pagerduty.com/schedules/{args.id}/overrides'
         request.post(self, uri=uri, extra_headers=self.extra_headers, payload=payload)
         if self.response['success']:
-            command.success = True
-            command.output.messages.append(f'Successfully added schedule override ID {self.response["body"][0]["override"]["id"]}.')
+            self.send_plain(command.event.channel, f'Successfully added schedule override ID {self.response["body"][0]["override"]["id"]}.')
         else:
-            command.output.errors.append('Failed to add the schedule override.')
+            self.send_plain(command.event.channel, 'Failed to add the schedule override.')
 
     def overrides_delete(self, args, command):
         uri = f'https://api.pagerduty.com/schedules/{args.id}/overrides/{args.override_id}'
         request.delete(self, uri=uri, extra_headers=self.extra_headers)
         if self.response['success']:
-            command.success = True
-            command.output.messages.append(f'Successfully deleted schedule override ID {args.override_id}.')
+            self.send_plain(command.event.channel, f'Successfully deleted schedule override ID {args.override_id}.')
         else:
-            command.output.errors.append(f'Failed to delete the schedule override: {self.response["error"]["message"]}')
+            self.send_plain(command.event.channel, f'Failed to delete the schedule override: {self.response["error"]["message"]}')
 
 ###############################################################################
 #
@@ -342,12 +335,11 @@ class Plugin(object):
                     output = []
                     for policy in chunk:
                         output.append([policy['id'], policy['name']])
-                    command.success = True
-                    command.output.messages.append(utils.generate_table(headers=['Escalation Policy ID', 'Escalation Policy Name'], data=output))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['Escalation Policy ID', 'Escalation Policy Name'], data=output))
             else:
-                command.output.errors.append(f'You haven\'t added any escalation policies.')
+                self.send_plain(command.event.channel, f'You haven\'t added any escalation policies.')
         else:
-            command.output.errors.append(f'Failed to get the list of escalation policies.')
+            self.send_plain(command.event.channel, f'Failed to get the list of escalation policies.')
     
 ###############################################################################
 #
@@ -360,7 +352,7 @@ class Plugin(object):
         try:
             args = self.schedules_parser.parse_args()
         except:
-            command.output.errors.append(self.schedules_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.schedules_parser.format_help().rstrip())
             return
         
         if not args.view:
@@ -371,12 +363,11 @@ class Plugin(object):
                         schedules = []
                         for schedule in chunk:
                             schedules.append([schedule['id'], schedule['name']])
-                        command.success = True
-                        command.output.messages.append(utils.generate_table(headers=['Schedule ID', 'Schedule Name'], data=schedules))
+                        self.send_monospace(command.event.channel, utils.generate_table(headers=['Schedule ID', 'Schedule Name'], data=schedules))
                 else:
-                    command.output.errors.append(f'You haven\'t added any schedules.')
+                    self.send_plain(command.event.channel, f'You haven\'t added any schedules.')
             else:
-                command.output.errors.append(f'Failed to get the list of schedules.')
+                self.send_plain(command.event.channel, f'Failed to get the list of schedules.')
 
         elif args.view:
             since = datetime.now()
@@ -398,18 +389,17 @@ class Plugin(object):
                     end = datetime.fromisoformat(person['end'].rstrip('Z'))
                     schedules.append([name, start.strftime(self.formatter), end.strftime(self.formatter), person['user']['summary']])
                 if len(schedules) > 0:
-                    command.success = True
                     for chunk in utils.chunker(schedules, 20):
-                        command.output.messages.append(utils.generate_table(headers=['Schedule', 'Start', 'End', 'Name'], data=chunk))
+                        self.send_monospace(command.event.channel, utils.generate_table(headers=['Schedule', 'Start', 'End', 'Name'], data=chunk))
                 else:
-                    command.output.errors.append(f'No schedule information found.')
+                    self.send_plain(command.event.channel, f'No schedule information found.')
             else:
                 if 'error' in self.response and 'message' in self.response['error']:
-                    command.output.errors.append(self.response['error']['message'])
+                    self.send_plain(command.event.channel, self.response['error']['message'])
                 else:
-                    command.output.errors.append(f'Schedule ID {args.view} not found.')
+                    self.send_plain(command.event.channel, f'Schedule ID {args.view} not found.')
         else:
-            command.output.errors.append(self.schedules_parser.format_help().rstrip())
+            self.send_plain(command.event.channel, self.schedules_parser.format_help().rstrip())
 
 ###############################################################################
 #
@@ -424,7 +414,7 @@ class Plugin(object):
         try:
             args = self.services_parser.parse_args()
         except:
-            command.output.errors.append(self.services_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.services_parser.format_help().rstrip())
             return
         if args.pattern:
             args.pattern = args.pattern.replace('*', '%')
@@ -432,16 +422,15 @@ class Plugin(object):
         results = self.__services_search(pattern=args.pattern)
         if results != None:
             if len(results) > 0:
-                command.success = True
                 for chunk in utils.chunker(results, 25):
                     output = []
                     for service in chunk:
                         output.append([service['id'], service['name']]) 
-                    command.output.messages.append(utils.generate_table(headers=['Service ID', 'Service Name'], data=output))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['Service ID', 'Service Name'], data=output))
             else:
-                command.output.errors.append(f'You haven\'t added any PagerDuty services.')
+                self.send_plain(command.event.channel, f'You haven\'t added any PagerDuty services.')
         else:
-            command.output.errors.append(f'Failed to get the list of PagerDuty services.')
+            self.send_plain(command.event.channel, f'Failed to get the list of PagerDuty services.')
 
     def __services_search(self, pattern=None):
         results = db.list(table_name='services', pattern=pattern)
@@ -454,19 +443,33 @@ class Plugin(object):
 ###############################################################################
 
     def users(self, command=None):
-        results = db.list(table_name='users')
+        # Need a function to better handle verification
+        sys.argv = command.argv[0:2]
+        sys.argv.append(' '.join(command.argv[2:]))
+        try:
+            args = self.users_parser.parse_args()
+        except:
+            self.send_monospace(command.event.channel, self.users_parser.format_help().rstrip())
+            return
+        if args.pattern:
+            args.pattern = args.pattern.replace('*', '%')
+
+        results = self.__users_search(pattern=args.pattern)
         if results != None:
             if len(results) > 0:
                 for chunk in utils.chunker(results, 25):
                     output = []
                     for policy in chunk:
                         output.append([policy['id'], policy['name']])
-                    command.success = True
-                    command.output.messages.append(utils.generate_table(headers=['User ID', 'User Name'], data=output))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['User ID', 'User Name'], data=output))
             else:
-                command.output.errors.append(f'Failed to get the list of users.')
+                self.send_plain(command.event.channel, f'Failed to get the list of users.')
         else:
-            command.output.errors.append(f'Failed to get the list of users.')
+            self.send_plain(command.event.channel, f'Failed to get the list of users.')
+
+    def __users_search(self, pattern=None):
+        results = db.list(table_name='users', pattern=pattern)
+        return results
 
 ###############################################################################
 #
@@ -485,26 +488,26 @@ class Plugin(object):
         try:
             args = self.windows_parser.parse_args()
         except:
-            command.output.errors.append(help[sys.argv[1]])
+            self.send_plain(command.event.channel, help[sys.argv[1]])
             return
 
         if hasattr(args, 'start'):
             args.start = utils.to8601(args.start)
             if not args.start:
-                command.output.errors.append(f'Invalid start time format: {args.start}')
+                self.send_plain(command.event.channel, f'Invalid start time format: `{args.start}`')
                 return
  
         if hasattr(args, 'end'):
             args.end = utils.to8601(args.end)
             if not args.end:
-                command.output.errors.append(f'Invalid end time format: {args.end}')
+                self.send_plain(command.event.channel, f'Invalid end time format: `{args.end}`')
                 return
 
         try:
             args.func(args, command)
         except Exception as e:
             print(e)
-            command.output.errors.append(self.windows_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.windows_parser.format_help().rstrip())
             return
 
     def windows_list(self, args, command):
@@ -526,7 +529,6 @@ class Plugin(object):
         #             override['user']['summary'],
         #         ])
         #     if len(overrides) > 0:
-        #         command.success = True
         #         for chunk in utils.chunker(overrides, 10):
         #             command.output.messages.append(utils.generate_table(headers=['ID', 'Schedule ID', 'Start', 'End', 'Name'], data=chunk))
         #     else:
@@ -552,7 +554,6 @@ class Plugin(object):
         # uri = f'https://api.pagerduty.com/schedules/{args.id}/overrides'
         # request.post(self, uri=uri, extra_headers=self.extra_headers, payload=payload)
         # if self.response['success']:
-        #     command.success = True
         #     command.output.messages.append(f'Successfully added schedule override ID {self.response["body"][0]["override"]["id"]}.')
         # else:
         #     command.output.errors.append('Failed to add the schedule override.')
@@ -562,7 +563,6 @@ class Plugin(object):
         # uri = f'https://api.pagerduty.com/schedules/{args.id}/overrides/{args.override_id}'
         # request.delete(self, uri=uri, extra_headers=self.extra_headers)
         # if self.response['success']:
-        #     command.success = True
         #     command.output.messages.append(f'Successfully deleted schedule override ID {args.override_id}.')
         # else:
         #     command.output.errors.append(f'Failed to delete the schedule override: {self.response["error"]["message"]}')
@@ -577,8 +577,8 @@ class Plugin(object):
         # success, message = self.scheduler.delete_jobs_for_module(module=self.classname)
         # if success:
         self.scheduler.add_job(module=self.classname, name='refresh_data', interval=60, function=(self.__refresh_data, ()), enabled=1)
-        self.scheduler.add_job(module=self.classname, name='events_ticker', interval=10, function=(self.__events_ticker, ()), enabled=1)
-        self.scheduler.add_job(module=self.classname, name='oncall_ticker', interval=10, function=(self.__oncall_ticker, ()), enabled=1)
+        self.scheduler.add_job(module=self.classname, name='events_ticker', interval=20, function=(self.__events_ticker, ()), enabled=1)
+        self.scheduler.add_job(module=self.classname, name='oncall_ticker', interval=20, function=(self.__oncall_ticker, ()), enabled=1)
         # else:
         #     logging.error(f'Failed to add the scheduled jobs for "{self.classname}": {message}')
 
@@ -676,7 +676,7 @@ class Plugin(object):
 
         # Services
         self.services_parser = argparse.ArgumentParser(add_help=False, prog='schedules', description='List services for your configured PagerDuty teams.')
-        self.services_parser.add_argument('-p', '--pattern', help='Specify a search pattern, e.g., *VKM*.', metavar='<pattern>.', required=False, action='store')
+        self.services_parser.add_argument('-p', '--pattern', help='Specify a search pattern using %% as a wildcard, e.g., %%VKM%%.', metavar='<pattern>.', required=False, action='store')
         self.services_parser.set_defaults(func=self.services)
 
         # Schedules
@@ -741,6 +741,7 @@ class Plugin(object):
         self.policies_parser.set_defaults(func=self.policies)
 
         self.users_parser = argparse.ArgumentParser(add_help=False, prog='users', description='List users for your configured PagerDuty teams.')
+        self.users_parser.add_argument('-p', '--pattern', help='Specify a search pattern using %% as a wildcard, e.g., %%Bob%%.', metavar='<pattern>.', required=False, action='store')
         self.users_parser.set_defaults(func=self.users)
 
     def __setup_methods(self):

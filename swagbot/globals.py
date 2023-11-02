@@ -7,3 +7,5 @@ def init():
     bot = None
     config_root = None
     schedulers = {}
+    start_time = 0
+    ready_time = 0

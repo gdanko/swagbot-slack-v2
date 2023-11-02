@@ -6,7 +6,7 @@ import sqlite3
 import swagbot.globals as globals
 import swagbot.utils.core as utils
 
-class Plugin(object):
+class Plugin(BasePlugin):
     def __init__(self, client):
         self.__configure_parsers()
         self.methods = self.__setup_methods()
@@ -20,26 +20,23 @@ class Plugin(object):
     def dad(self, command=None):
         quote = self.__quotes(category='dad')
         if quote:
-            command.success = True
-            command.output.messages.append(quote)
+            self.send_plain(command.event.channel, quote)
         else:
-            command.output.errors.append('Failed to find a dad joke. :(')
+            self.send_plain(command.event.channel, 'Failed to find a dad joke. :(')
 
     def fortune(self, command=None):
         quote = self.__quotes(category='fortunes')
         if quote:
-            command.success = True
-            command.output.messages.append(quote)
+            self.send_plain(command.event.channel, quote)
         else:
-            command.output.errors.append('Failed to find a fortune. :(')
+            self.send_plain(command.event.channel, 'Failed to find a fortune. :(')
         
     def yomama(self, command=None):
         quote = self.__quotes(category='yomama')
         if quote:
-            command.success = True
-            command.output.messages.append(quote)
+            self.send_plain(command.event.channel, quote)
         else:
-            command.output.errors.append('Failed to find a yomama joke. :(')
+            self.send_plain(command.event.channel, 'Failed to find a yomama joke. :(')
 
     def __quotes(self, category=None):
         select = f'SELECT quote FROM quotes where category="{category}" ORDER BY RANDOM() LIMIT 1'

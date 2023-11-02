@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 import sqlite3
 import swagbot.utils.core as utils
@@ -10,16 +11,24 @@ def add_job(module=None, name=None, interval=None, function=None, enabled=None):
     job = get_job_by_module_and_name(module=module, name=name)
     if job:
         update = f'UPDATE scheduler SET module=?, name=?, interval=?, function=?, enabled=? WHERE id=?'
-        with conn:
-            cursor = conn.cursor()
-            cursor.execute(update, (module, name, interval, encoded_data, enabled, job['id']))
-            conn.commit()
+        try:
+            with conn:
+                cursor = conn.cursor()
+                cursor.execute(update, (module, name, interval, encoded_data, enabled, job['id']))
+                conn.commit()
+        except Exception as e:
+            logging.error(f'Failed to execute {update}: {e}')
+            return False
     else:
         insert = f'INSERT OR REPLACE INTO scheduler (module, name, interval, function, enabled) VALUES (?, ?, ?, ?, ?)'
-        with conn:
-            cursor = conn.cursor()
-            cursor.execute(insert, (module, name, interval, encoded_data, enabled))
-            conn.commit()
+        try:
+            with conn:
+                cursor = conn.cursor()
+                cursor.execute(insert, (module, name, interval, encoded_data, enabled))
+                conn.commit()
+        except Exception as e:
+            logging.error(f'Failed to execute {insert}: {e}')
+            return False
 
 def get_jobs(module=None, name=None):
     output = []
@@ -37,94 +46,147 @@ def get_jobs(module=None, name=None):
         where_str = 'WHERE ' + ' AND '.join(where)
     
     select = f'SELECT id, module, name, interval, enabled FROM scheduler {where_str}'
-    with conn:
-        cursor = conn.cursor()
-        res = cursor.execute(select)
-        for row in res:
-                output.append(row)
-        return output
+    try:
+        with conn:
+            cursor = conn.cursor()
+            results = cursor.execute(select)
+            for row in results:
+                    output.append(row)
+            return output
+    except Exception as e:
+        logging.error(f'Failed to execute {select}: {e}')
+        return False
 
 def delete_job(module=None, name=None):
-    delete = f'DELETE FROM scheduler WHERE module=? AND name=?'
-    cursor.execute(delete, (module, name))
-    conn.commit()
+    delete = f'DELETE FROM scheduler WHERE module="{module} AND name="{name}"'
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(delete)
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {delete}: {e}')
+        return False
 
 def delete_job_by_id(id=None):
-    delete = f'DELETE FROM scheduler WHERE id=?'
-    cursor.execute(delete, (id))
-    conn.commit()
+    delete = f'DELETE FROM scheduler WHERE id={id}'
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(delete)
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {delete}: {e}')
+        return False
 
 def enable_job(module=None, name=None):
-    delete = f'UPDATE scheduler SET enabled=1 WHERE module=? AND name=?'
-    cursor.execute(delete, (module, name))
-    conn.commit()
+    delete = f'UPDATE scheduler SET enabled=1 WHERE module="{module} AND name="{name}"'
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(delete)
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {delete}: {e}')
+        return False        
 
 def enable_job_by_id(id=None):
-    delete = f'UPDATE scheduler SET enabled=1 WHERE id=?'
-    cursor.execute(delete, (id))
-    conn.commit()
+    delete = f'UPDATE scheduler SET enabled=1 WHERE id={id}'
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(delete, (id))
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {delete}: {e}')
+        return False  
 
 def disable_job(module=None, name=None):
     update = f'UPDATE scheduler SET enabled=0 WHERE module="{module}" AND name="{name}"'
-    cursor.execute(update)
-    conn.commit()
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(update)
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {update}: {e}')
+        return False  
 
 def disable_job_by_id(id=None):
-    update = f'UPDATE scheduler SET enabled=0 WHERE id=?'
-    cursor.execute(update, (id))
-    conn.commit()
+    update = f'UPDATE scheduler SET enabled=0 WHERE id={id}'
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(update, (id))
+            conn.commit()
+    except Exception as e:
+        logging.error(f'Failed to execute {update}: {e}')
+        return False  
 
 def get_all_jobs():
     output = []
     select = 'SELECT * FROM scheduler'
-    res = cursor.execute(select)
-    for row in res:
-            row['enabled'] = True if row['enabled'] else False
-            output.append(row)
-    return output
+    try:
+        with conn:
+            cursor = conn.cursor()
+            results = cursor.execute(select)
+            for row in results:
+                    row['enabled'] = True if row['enabled'] else False
+                    output.append(row)
+            return output
+    except Exception as e:
+        logging.error(f'Failed to execute {select}: {e}')
+        return output 
 
 def get_jobs_by_module(module=None):
     output = []
     select = f'SELECT * FROM scheduler WHERE module="{module}"'
-    res = cursor.execute(select)
-    for row in res:
-            row['enabled'] = True if row['enabled'] else False
-            output.append(row)
-    return output
+    try:
+        with conn:
+            cursor = conn.cursor()
+            results = cursor.execute(select)
+            for row in results:
+                row['enabled'] = True if row['enabled'] else False
+                output.append(row)
+            return output
+    except Exception as e:
+        logging.error(f'Failed to execute {select}: {e}')
+        return output 
 
 def get_job_by_module_and_name(module=None, name=None):
     select = f'SELECT * FROM scheduler WHERE module="{module}" AND name="{name}"'
-    cursor.execute(select)
-    result = cursor.fetchone()
-    if result:
-        return result
-    else:
-        return False
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(select)
+            results = cursor.fetchone()
+            return results if results else False
+    except Exception as e:
+        logging.error(f'Failed to execute {select}: {e}')
+        return False 
 
 def get_job_by_id(id=None):
     select = f'SELECT * FROM scheduler WHERE id={id}'
-    cursor.execute(select)
-    result = cursor.fetchone()
-    if result:
-        return result
-    else:
-        return False
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(select)
+            results = cursor.fetchone()
+            return results if results else False
+    except Exception as e:
+        logging.error(f'Failed to execute {select}: {e}')
+        return False 
 
 def delete_jobs_for_module(module=None):
     delete = f'DELETE FROM scheduler WHERE module="{module}"'
     try:
-        cursor.execute(delete)
-        conn.commit()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(delete)
+            conn.commit()
     except Exception as e:
-        return False
-
-    delete = f'DELETE FROM scheduler_channels WHERE module="{module}"'
-    try:
-        cursor.execute(delete)
-        conn.commit()
-        return True
-    except Exception as e:
-        return False
+        logging.error(f'Failed to execute {delete}: {e}')
+        return False 
 
 config_root = os.path.join(os.path.expanduser('~'), '.swagbot')
 dbfile = os.path.join(config_root, 'bot.db')

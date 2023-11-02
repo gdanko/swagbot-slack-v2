@@ -13,7 +13,7 @@ import swagbot.utils.core as utils
 import sys
 import time
 
-class Plugin(object):
+class Plugin(BasePlugin):
     def __init__(self, client):
         self.__configure_parsers()
         self.methods = self.__setup_methods()
@@ -32,7 +32,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.apg_parser.parse_args()
         except:
-            command.output.errors.append(self.apg_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.apg_parser.format_help().rstrip())
             return
 
         letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -61,9 +61,12 @@ class Plugin(object):
         if (quantity <= 0) or (quantity > 10):
             quantity = 10
 
-        for x in range(0, quantity):
-            command.output.messages.append(''.join(random.choice(characters) for x in range(length)))
-        command.success = True
+        passwords = []
+        # pad the xx)
+        for x in range(1, quantity+1):
+            password = ''.join(random.choice(characters) for x in range(length))
+            passwords.append(f'{x}) {password}')
+        self.send_monospace(command.event.channel, '\n'.join(passwords))
 
     def ball(self, command=None):
         if len(command.argv) > 1:
@@ -89,11 +92,9 @@ class Plugin(object):
                 'Yes.',
                 'You may rely on it.'
             ]
-            command.success = True
-            command.output.messages.append(random.choice(answers))
+            self.send_plain(command.event.channel, random.choice(answers))
         else:
-            command.output.errors.append('No question specified.')
-            command.output.errors.append(f'Usage: {command.usage}')
+            self.send_plain(command.event.channel, 'No question specified.')
 
     def bytes(self, command=None):
         sys.argv = command.argv
@@ -101,7 +102,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.bytes_parser.parse_args()
         except:
-            command.output.errors.append(self.bytes_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.bytes_parser.format_help().rstrip())
             return
 
         conversion_table = {
@@ -148,10 +149,9 @@ class Plugin(object):
                     ])
 
         if len(output) > 0:
-            command.success = True
-            command.output.messages.append(utils.generate_table(headers=['Amount', 'Unit'], data=output))
+            self.send_monospace(command.event.channel, utils.generate_table(headers=['Amount', 'Unit'], data=output))
         else:
-            command.output.errors.append('Hmmm something went wrong.')
+            self.send_plain(command.event.channel, 'Hmmm something went wrong.')
 
     def calc(self, command=None):
         command.argv.pop(0)
@@ -163,17 +163,15 @@ class Plugin(object):
                 try:
                     answer = os.popen('echo "{}" | {}'.format(equation, binary)).read().rstrip()
                     if answer == '':
-                        command.output.errors.append(f'Calculation failed for: {equation}')
+                        self.send_plain(command.event.channel, f'Calculation failed for: {equation}')
                     else:
-                        command.success = True
-                        command.output.messages.append(f'{equation} = {answer}')
+                        self.send_plain(command.event.channel, f'{equation} = {answer}')
                 except Exception as e:
-                    command.output.errors.append(f'Calculation failed for: {equation}: {e}')
+                    self.send_plain(command.event.channel, f'Calculation failed for: {equation}: {e}')
             else:
-                command.output.errors.append(f'The "{binary}" command was not found in my PATH.')
+                self.send_plain(command.event.channel, f'The "{binary}" command was not found in my PATH.')
         else:
-            command.output.errors.append(f'No input specified.')
-            command.output.errors.append(f'Usage: {command.usage}')
+            self.send_plain(command.event.channel, f'No input specified.')
 
     def crypto(self, command=None):
         sys.argv = command.argv
@@ -181,18 +179,18 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.crypto_parser.parse_args()
         except:
-            command.output.errors.append(self.crypto_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.crypto_parser.format_help().rstrip())
         
         from_code = getattr(args, 'from').upper()
         to_code = getattr(args, 'to').upper()
 
         to_lookup = db.crypto_lookup(currency_code=to_code)
         if not to_lookup:
-            command.output.errors.append(f'Cryptocurrency code {to_lookup} not found.')
+            self.send_plain(command.event.channel, f'Cryptocurrency code {to_lookup} not found.')
 
         from_lookup = db.crypto_lookup(currency_code=from_code)
         if not from_lookup:
-            command.output.errors.append(f'Cryptocurrency code {from_lookup} not found.')
+            self.send_plain(command.event.channel, f'Cryptocurrency code {from_lookup} not found.')
 
         uri = 'https://www.alphavantage.co/query'
         qs = {
@@ -204,10 +202,9 @@ class Plugin(object):
         request.get(self, uri=uri, qs=qs)
         if 'Realtime Currency Exchange Rate' in self.response:
             to_amount = round(float(args.amount) * float(self.response['Realtime Currency Exchange Rate']['5. Exchange Rate']), 2)
-            command.success = True
-            command.output.messages.append(f'{args.amount} {from_code} = {to_amount} {to_code}')
+            self.send_plain(command.event.channel, f'{args.amount} {from_code} = {to_amount} {to_code}')
         else:
-            command.output.errors.append('Incomplete data received.')
+            self.send_plain(command.event.channel, 'Incomplete data received.')
 
     def currency(self, command=None):
         sys.argv = command.argv
@@ -215,7 +212,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.currency_parser.parse_args()
         except:
-            command.output.errors.append(self.currency_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.currency_parser.format_help().rstrip())
             return
 
         if hasattr(args, 'from'):
@@ -226,11 +223,11 @@ class Plugin(object):
         if from_code and to_code:
             to_lookup = db.currency_lookup(currency_code=to_code)
             if not to_lookup:
-                command.output.errors.append(f'Currency code {to_lookup} not found.')
+                self.send_plain(command.event.channel, f'Currency code {to_lookup} not found.')
 
             from_lookup = db.currency_lookup(currency_code=from_code)
             if not from_lookup:
-                command.output.errors.append(f'Currency code {from_lookup} not found.')
+                self.send_plain(command.event.channel, f'Currency code {from_lookup} not found.')
 
             uri = 'https://www.alphavantage.co/query'
             qs = {
@@ -242,10 +239,9 @@ class Plugin(object):
             request.get(self, uri=uri, qs=qs)
             if 'Realtime Currency Exchange Rate' in self.response:
                 to_amount = round(float(args.amount) * float(self.response['Realtime Currency Exchange Rate']['5. Exchange Rate']), 2)
-                command.success = True
-                command.output.messages.append(f'{args.amount} {from_code} = {to_amount} {to_code}')
+                self.send_plain(command.event.channel, f'{args.amount} {from_code} = {to_amount} {to_code}')
             else:
-                command.output.errors.append('Incomplete data received.')
+                self.send_plain(command.event.channel, 'Incomplete data received.')
 
     def dict(self, command=None):
         sys.argv = command.argv
@@ -253,8 +249,8 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.dict_parser.parse_args()
         except:
-            command.output.errors.append(self.dict_parser.format_help().rstrip())
-            return command.output
+            self.send_monospace(command.event.channel, self.dict_parser.format_help().rstrip())
+            return
 
         if self.wordnik_key:
             limit = 4
@@ -269,23 +265,26 @@ class Plugin(object):
             }
             request.get(self, uri=uri, qs=qs)
             if self.success: # Is the JSON validated in the request module? If not, do so here.
-                command.success = True
                 response = self.response['body'] if 'body' in self.response else self.response
 
                 if len(response) > 0:
+                    dict_output = []
                     for d in response:
                         if 'text' in d:
                             definition = d["text"].replace('<xref>', '').replace('</xref>', '')
-                            command.output.messages.append(f'{args.word.title()}: {d["partOfSpeech"].title()}: {definition}')
+                            dict_output.append(f'{args.word.title()}: {d["partOfSpeech"].title()}: {definition}')
+                    self.send_monospace(command.event.channel, '\n'.join(dict_output))
+
                 else:
-                    command.output.errors.append(f'No definition found for {args.word}.')
+                    self.send_plain(command.event.channel, f'No definition found for {args.word}.')
             else:
                 if 'error' in response:
-                    command.output.errors.append(f'Dictionary lookup failed: {response["error"]}.')
+                    self.send_plain(command.event.channel, f'Dictionary lookup failed: {response["error"]}.')
                 else:
-                    command.output.errors.append('Dictionary lookup failed.')
+                    self.send_plain(command.event.channel, 'Dictionary lookup failed.')
         else:
-            command.output.errors.append('Unable to fetch the definition due to missing API key.')
+            logging.error('Missing Wordnik API key.')
+            self.send_plain(command.event.channel, 'I am currently unable to perform dictionary lookups. This error has been logged.')
 
     def quakes(self, command=None):
         sys.argv = command.argv
@@ -293,8 +292,8 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.quakes_parser.parse_args()
         except:
-            command.output.errors.append(self.quakes_parser.format_help().rstrip())
-            return command.output
+            self.send_monospace(command.event.channel, self.quakes_parser.format_help().rstrip())
+            return
         
         now = int(time.time())
         local_8601_start_time = datetime.datetime.fromtimestamp(now - 86400).isoformat('T', 'seconds')
@@ -315,7 +314,6 @@ class Plugin(object):
             output = []
             chunk_size = 20
             if len(self.response['features']) > 0:
-                command.success = True
                 for event in self.response['features']:
                     location = 'Unknown' if event['properties']['place'] is None else event['properties']['place']
                     output.append([
@@ -328,9 +326,9 @@ class Plugin(object):
 
                 chunks = utils.array_to_chunks(output, chunk_size)
                 for chunk in list(chunks):
-                    command.output.messages.append(utils.generate_table(headers=['Time', 'Updated', 'Location', 'Description', 'Mag'], data=chunk))
+                    self.send_monospace(command.event.channel, utils.generate_table(headers=['Time', 'Updated', 'Location', 'Description', 'Mag'], data=chunk))
             else:
-                command.output.errors.append('No results found for the given criteria')
+                self.send_plain(command.event.channel, 'No results found for the given criteria')
 
     def stocks(self, command=None):
         sys.argv = command.argv
@@ -338,8 +336,8 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.stocks_parser.parse_args()
         except:
-            command.output.errors.append(self.stocks_parser.format_help().rstrip())
-            return command.output
+            self.send_monospace(command.event.channel, self.stocks_parser.format_help().rstrip())
+            return
 
         stock_data = []
         for symbol in args.symbol:
@@ -371,13 +369,11 @@ class Plugin(object):
                         response['Time Series (60min)'][latest]['5. volume'],
                     ])
             else:
-                command.output.errors.append('Crikey! No stock data found. Try again later.')
-
+                self.send_plain(command.event.channel, 'Uh oh! No stock data found. Try again later.')
         if len(stock_data) > 0:
-            command.success = True
-            command.output.messages.append(utils.generate_table(headers=['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'], data=stock_data))
+            self.send_monospace(command.event.channel, utils.generate_table(headers=['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'], data=stock_data))
         else:
-            command.output.errors.append('Crikey! No stock data found. Try again later.')
+            self.send_plain(command.event.channel, 'Uh oh! No stock data found. Try again later.')
 
     def tiny(self, command=None):
         sys.argv = command.argv
@@ -385,7 +381,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.tiny_parser.parse_args()
         except:
-            command.output.errors.append(self.tiny_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.tiny_parser.format_help().rstrip())
             return
         
         if self.tinyurl_key:
@@ -404,22 +400,21 @@ class Plugin(object):
                     if 'status_code' in self.response:
                         if self.response['status_code'] == 200:
                             if 'data' in self.response and 'tiny_url' in self.response['data']:
-                                command.success = True
-                                command.output.messages.append(self.response['data']['tiny_url'])
+                                self.send_plain(command.event.channel, self.response['data']['tiny_url'])
                             else:
-                                command.output.errors.append('The URL shortener was unable to shorten the URL.')
+                                self.send_plain(command.event.channel, 'The URL shortener was unable to shorten the URL.')
                         else:
-                            command.output.errors.append('The URL shortener returned a non-200 status code. Please try again later.')
+                            self.send_plain(command.event.channel, 'The URL shortener returned a non-200 status code. Please try again later.')
                     else:
-                        command.output.errors.append('The URL shortener returned an unknown error.')
+                        self.send_plain(command.event.channel, 'The URL shortener returned an unknown error.')
                 else:
-                    command.output.errors.append('The URL shortener returned an unknown error.')
+                    self.send_plain(command.event.channel, 'The URL shortener returned an unknown error.')
             else:
                 logging.error(f'Failed to shorten the URL {args.url}')
-                command.output.errors.append('You specified an invalid URL. This has been logged. If you feel this was an error, please contact a bot administrator.')
+                self.send_plain(command.event.channel, 'You specified an invalid URL. This has been logged. If you feel this was an error, please contact a bot administrator.')
         else:
             logging.error('Missing tinyurl API key.')
-            command.output.errors.append('I am currently unable to create tiny URLs. This error has been logged. Please try again later.')            
+            self.send_plain(command.event.channel, 'I am currently unable to create tiny URLs. This error has been logged.')            
 
     def units(self, command=None):
         sys.argv = command.argv
@@ -427,7 +422,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.units_parser.parse_args()
         except:
-            command.output.errors.append(self.units_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.units_parser.format_help().rstrip())
             return
 
         try:
@@ -436,11 +431,10 @@ class Plugin(object):
             t = args.to
             ureg = pint.UnitRegistry()
             converted = ureg.Quantity(float(u), ureg.parse_expression(f)).to(t)._magnitude
-            command.success = True
-            command.output.messages.append('{:.2f} {} = {:.2f} {}'.format(float(u), f, float(converted), t))
+            self.send_plain(command.event.channel, '{:.2f} {} = {:.2f} {}'.format(float(u), f, float(converted), t))
         except Exception as e:
             logging.error(f'Conversion failed: {e}')
-            command.output.errors.append(f'Conversion failed: {e}')
+            self.send_plain(command.event.channel, f'Conversion failed: {e}')
 
     def weather(self, command=None):
         sys.argv = command.argv
@@ -448,7 +442,7 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.weather_parser.parse_args()
         except:
-            command.output.errors.append(self.weather_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.weather_parser.format_help().rstrip())
             return
 
         longitude = None
@@ -500,7 +494,7 @@ class Plugin(object):
                 if self.success:
                     response = self.response['body'] if 'body' in self.response else self.response
                     # Put error checking in all of this!!!!!
-                    command.success = True
+                    weather_output = []
                     city = response['name']
                     current_f = response['main']['temp']
                     current_c = utils.farenheit_to_celsius(current_f)
@@ -526,18 +520,19 @@ class Plugin(object):
                     if len(header) == 0:
                         header = [args.loc]
 
-                    command.output.messages.append(f'Current weather for {", ".join(header)}')
-                    command.output.messages.append(f'Currently: {current_f}°F ({current_c}°C)')
-                    command.output.messages.append(f'Feels like: {feels_like_f}°F ({feels_like_c}°C)')
-                    command.output.messages.append(f'Humidity {humidity}%')
-                    command.output.messages.append(f'Condition: {current_condition}')
-                    command.output.messages.append(f'Low: {min_f}°F ({min_c}°C) | High: {max_f}°F ({max_c}°C)')
-                    command.output.messages.append(f'Wind {wind_degrees}° @ {wind_speed} mph')
+                    weather_output.append(f'Current weather for {", ".join(header)}')
+                    weather_output.append(f'Currently: {current_f}°F ({current_c}°C)')
+                    weather_output.append(f'Feels like: {feels_like_f}°F ({feels_like_c}°C)')
+                    weather_output.append(f'Humidity {humidity}%')
+                    weather_output.append(f'Condition: {current_condition}')
+                    weather_output.append(f'Low: {min_f}°F ({min_c}°C) | High: {max_f}°F ({max_c}°C)')
+                    weather_output.append(f'Wind {wind_degrees}° @ {wind_speed} mph')
+                    self.send_plain(command.event.channel, '\n'.join(weather_output))
             else:
-                command.output.errors.append(f'Failed to get geolocation data for {args.loc}.')
+                self.send_plain(command.event.channel, f'Failed to get geolocation data for {args.loc}.')
         else:
             logging.error('Missing openweathermap API key.')
-            command.output.errors.append('I am currently unable to perform weather lookups. This error has been logged. Please try again later.')
+            self.send_plain(command.event.channel, 'I am currently unable to perform weather lookups. This error has been logged.')
 
     def __configure_parsers(self):
         self.apg_parser = argparse.ArgumentParser(add_help=False, prog='apg', description='Generate a series of random passwords.')

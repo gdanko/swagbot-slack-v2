@@ -1,3 +1,6 @@
+import base64
+import dill
+import logging
 import swagbot.database.scheduler as db
 import swagbot.utils.core as utils
 
@@ -30,15 +33,15 @@ def enable(id=None):
             if job:
                 db.enable_job(module=job['module'], name=job['name'])
                 if job_enabled_by_id(id=id):
-                    return True, f'The scheduled job {job["module"]}.{job["name"]} was successfully enabled.'
+                    return f'The scheduled job `{job["module"]}.{job["name"]}` was successfully enabled.'
                 else:
-                    return False, f'Failed to enable the scheduled job {job["module"]}.{job["name"]}.'
+                    return 'Failed to enable the scheduled job {job["module"]}.{job["name"]}.'
             else:
-                return False, (f'The scheduled job with the ID {id} could not be found.')
+                return f'The scheduled job with the ID `{id}` could not be found.'
         else:
-            return False, (f'The scheduled job {job["module"]}.{job["name"]} isn\'t currently enabled.')
+            return f'The scheduled job `{job["module"]}.{job["name"]}` isn\'t currently enabled.'
     else:
-        return False, (f'The scheduled job The scheduled job with the ID {id} could not be found.')
+        return f'The scheduled job The scheduled job with the ID `{id}` could not be found.'
 
 def disable(id=None):
     if job_exists_by_id(id=id):
@@ -47,15 +50,30 @@ def disable(id=None):
             if job:
                 db.disable_job(module=job['module'], name=job['name'])
                 if not job_enabled_by_id(id=id):
-                    return True, (f'The scheduled job {job["module"]}.{job["name"]} was successfully disabled.')
+                    return f'The scheduled job `{job["module"]}.{job["name"]}` was successfully disabled.'
                 else:
-                    return False, (f'Failed to disable the scheduled job {job["module"]}.{job["name"]}.')
+                    return f'Failed to disable the scheduled job `{job["module"]}.{job["name"]}`.'
             else:
-                return False, (f'The scheduled job with the ID {id} could not be found.')
+                return f'The scheduled job with the ID `{id}` could not be found.'
         else:
-            return False, (f'The scheduled job {job["module"]}.{job["name"]} isn\'t currently disabled.')
+            return f'The scheduled job `{job["module"]}.{job["name"]}` isn\'t currently disabled.'
     else:
-        return False, (f'The scheduled job with the ID {id} could not be found.')
+        return f'The scheduled job with the ID `{id}` could not be found.'
+
+def run(id=None):
+    job = get_job_by_id(id=id)
+    if job:
+        logging.info(f'Executing the job {job["module"]}.{job["name"]}.')
+        try:
+            decoded = dill.loads(base64.b64decode(job['function']))
+            fn, args = decoded
+            fn(*args)
+            return f'Successfully executed the job `{job["module"]}.{job["name"]}`.'
+        except Exception as e:
+            logging.error(f'Failed to execute the job {job["module"]}.{job["name"]}: {e}')
+            return f'Failed to execute the job {job["module"]}.{job["name"]}.'
+    else:
+        return f'Job ID `{id}` not found.'
 
 def job_exists(module=None, name=None):
     job = db.get_jobs(module=module, name=name)

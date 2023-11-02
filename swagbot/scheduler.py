@@ -38,10 +38,9 @@ class Scheduler(object):
         while self.thread_started:
             if self.scheduler_thread.is_alive():
                 now = datetime.datetime.now()
-                minute = now.minute
                 jobs = db.get_jobs_by_module(module=self.name)
                 for job in jobs:
-                    if (minute % job['interval']) == 0:
+                    if (now.minute % job['interval']) == 0 and now.second == 0:
                         if job['enabled']:
                             logging.info(f'Executing the job {job["module"]}.{job["name"]}.')
                             try:
@@ -52,7 +51,7 @@ class Scheduler(object):
                                 logging.error(f'Failed to execute the job {job["module"]}.{job["name"]}: {e}')
                         else:
                             logging.info(f'The job {job["module"]}.{job["name"]} is disabled. Skipping.')
-            time.sleep(60)
+            time.sleep(1)
     
     def job_count(self):
         jobs = self.get_jobs(module=self.name)

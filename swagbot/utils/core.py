@@ -2,11 +2,14 @@ from datetime import datetime, timedelta, timezone
 from dateutil import parser
 from shutil import which
 from tabulate import tabulate
+import importlib
 import json
 import logging
+import pkgutil
 import re
 import swagbot.database.core as db
 import swagbot.exception as exception
+import swagbot.globals as globals
 import sys
 import time
 import yaml
@@ -214,3 +217,50 @@ def generate_table(headers, data):
         numalign='left',
         disable_numparse=True
     )
+
+def iter_namespace(ns_pkg):
+    # Specifying the second argument (prefix) to iter_modules makes the
+    # returned name an absolute name instead of a relative one. This allows
+    # import_module to work without having to do additional modification to the name.
+    return pkgutil.iter_modules(ns_pkg.__path__, ns_pkg.__name__ + '.')
+
+def prune_commands_table():
+    loaded_commands = []
+    for _, plugin_obj in globals.plugins.items():
+        plugin_instance = plugin_obj['instance']
+        if hasattr(plugin_instance, 'methods'):
+            loaded_commands += list(plugin_instance.methods.keys())
+    loaded_commands = sorted(loaded_commands)
+
+    command_table_commands = db.all_commands()
+
+    to_prune = list(set(command_table_commands) - set(loaded_commands))
+    if len(to_prune) > 0:
+        command = 'command' if len(to_prune) == 1 else 'commands'
+        logging.info(f'Pruning {len(to_prune)} {command} from the commands table.')
+        db.prune_commands_table(commands=to_prune)
+
+def load_module(module=None, client=None):
+    logging.info(f'Loading module {module}.')
+    try:
+        module_obj = importlib.import_module(module)
+        module_instance = module_obj.Plugin(client=client)
+        logging.info(f'Updating bot commands for the module {module}.')
+        db.update_plugin_commands(module=module_instance.classname, methods=module_instance.methods)
+        globals.plugins[module] = {'module': module, 'instance': module_instance}
+        return None
+    except Exception as e:
+        return e
+
+def reload_module(module=None, client=None):
+    logging.info(f'Reloading module {module}.')
+    try:
+        module_obj = importlib.import_module(module)
+        importlib.reload(module_obj)
+        module_instance = module_obj.Plugin(client=client)
+        logging.info(f'Updating bot commands for the module {module}.')
+        db.update_plugin_commands(module=module_instance.classname, methods=module_instance.methods)
+        globals.plugins[module] = {'module': module, 'instance': module_instance}
+        return None
+    except Exception as e:
+        return e

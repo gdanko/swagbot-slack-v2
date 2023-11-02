@@ -2,15 +2,12 @@ from slack_sdk.errors import SlackApiError
 from swagbot.core import BasePlugin
 import argparse
 import logging
-import swagbot.database.maintenance as db
-import swagbot.globals as globals
+import os
 import swagbot.scheduler
-import swagbot.utils.core as utils
 import sys
-import threading
 import time
 
-class Plugin(object):
+class Plugin(BasePlugin):
     def __init__(self, client):
         self.__configure_parsers()
         self.methods = self.__setup_methods()
@@ -101,28 +98,26 @@ class Plugin(object):
             with self.redirect_stdout_stderr(os.devnull):
                 args = self.maint_parser.parse_args()
         except:
-            command.output.errors.append(self.maint_parser.format_help().rstrip())
+            self.send_monospace(command.event.channel, self.maint_parser.format_help().rstrip())
             return
         
         if args.pause and args.resume:
-            command.output.errors.append('--pause and --resume are mutually exclusive.')
+            self.send_plain(command.event.channel, '--pause and --resume are mutually exclusive.')
             return
 
         elif args.pause:
             if self.paused:
-                command.output.errors.append('The bot\'s maintenance thread is already paused.')
+                self.send_plain(command.event.channel, 'The bot\'s maintenance thread is already paused.')
             else:
                 self.paused = True
-                command.success = True
-                command.output.messages.append('The bot\'s maintenance thread has been paused.')
+                self.send_plain(command.event.channel, 'The bot\'s maintenance thread has been paused.')
         
         elif args.resume:
             if not self.paused:
-                command.output.errors.append('The bot\'s maintenance thread is already running.')
+                self.send_plain(command.event.channel, 'The bot\'s maintenance thread is already running.')
             else:
                 self.paused = False
-                command.success = True
-                command.output.messages.append('The bot\'s maintenance thread has been resumed.')
+                self.send_plain(command.event.channel, 'The bot\'s maintenance thread has been resumed.')
 
     def __configure_parsers(self):
         self.maint_parser = argparse.ArgumentParser(add_help=False, prog='maint', description='Pause or resume the bot\'s maintenance thread.')

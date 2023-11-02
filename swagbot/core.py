@@ -42,9 +42,6 @@ class Command(object):
         self.module = None
         self.monospace = False
         self.name = None
-        self.output = CommandOutput()
-        self.split_output = False
-        self.success = False
         self.type = None
         self.usage = None
         self.__dict__.update(kwargs)
@@ -55,66 +52,22 @@ class Command(object):
         if self.name:
             if self.enabled == True:
                 if (self.is_admin and not is_admin) and not self.event.user in globals.config['owners']:
-                    self.output.errors.append(f'You are not permitted to use the command "{self.name}".')
+                    self.send(self.event.channel, f'You are not permitted to use the command `{self.name}`.')
+                    return False
 
                 if self.type != 'all' and self.type != self.message_type:
-                    self.output.errors.append(f'The command "{self.name}" cannot be used in {self.type}.')
+                    self.send(self.event.channel, f'The command `{self.name}` cannot be used in {self.message_type}.')
+                    return False
             else:
-                self.output.errors.append(f'The command "{self.name}" is not currently enabled.')
+                self.send(self.event.channel, f'The command `{self.name}` is not currently enabled.')
+                return False
         else:
-            self.output.errors.append(f'The command "{self.name}" was not found. This is a fatal error.')
+            self.send(self.event.channel, f'The command `{self.name}` was not found. This is a fatal error.')
+            return False
+        return True
 
     def execute(self):
         self.command(self)
-
-    def process_private(self):
-        if self.split_output:
-            for message in self.output.messages:
-                if self.monospace:
-                    message = f'```{message}```'
-                self.send(self.event.channel, message)
-        else:
-            message = '\n'.join(self.output.messages)
-            if self.monospace:
-                message = f'```{message}```'
-            self.send(self.event.channel, message)
-
-    def process_public(self):
-        at = f'<@{self.event.user}>'
-        self.send(self.event.channel, at)
-        if self.split_output:
-            for message in self.output.messages:
-                if self.monospace:
-                    message = f'```{message}```'
-                self.send(self.event.channel, message)
-        else:
-            message = '\n'.join(self.output.messages)
-            if self.monospace:
-                message = f'```{message}```'
-            self.send(self.event.channel, message)
-    
-    def process_error(self):
-        errors = []
-        if self.message_type == 'private':
-            errors = '\n'.join(self.output.errors)
-            errors = f'```{errors}```'
-            # for error in self.output.errors:
-            #     errors.append(f'```{error}```')
-            self.send(self.event.channel, errors)
-        elif self.message_type == 'public':
-            at = f'<@{self.event.user}>'
-            for error in self.output.errors:
-                errors.append(f'```{at} {error}```')
-            self.send(self.event.channel, errors)
-    
-    def process_output(self):
-        if self.success:
-            if self.message_type == 'private':
-                self.process_private()
-            elif self.message_type == 'public':
-                self.process_public()
-        else:
-            self.process_error()
 
     def send(self, channel, messages):
         if type(messages) == str:
@@ -126,6 +79,7 @@ class Command(object):
 class BasePlugin(object):
     def __init__(self, client):
         self.classname = self.__class__.__module__
+        self.client = client
 
     @contextmanager
     def redirect_stdout_stderr(self, stream):
@@ -138,12 +92,12 @@ class BasePlugin(object):
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+    
+    def send_monospace(self, channel, text):
+        self.client.chat_postMessage(channel=channel, text=f'```{text}```')
 
-class CommandOutput(object):
-    def __init__(self, **kwargs):
-        self.classname = self.__class__
-        self.messages = []
-        self.errors = []
+    def send_plain(self, channel, text):
+        self.client.chat_postMessage(channel=channel, text=text)
 
 def current_class():
     return inspect.stack()[1][3]
